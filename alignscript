@@ -1,0 +1,55 @@
+#!/bin/bash
+# Written by Fabico Ticconi (www.fabioticconi.wordpress.com)
+# Edited by VietThang (vietthang.hcmus@gmail.com)
+
+# Path to bilingual corpus
+fcorpus="/home/vietthang/mycorpus/DemoMGiza/europarl-v7.de-en"
+ecorpus="/home/vietthang/mycorpus/DemoMGiza/europarl-v7.de-en"
+# Path to tokenizer (using Moses's tokenizer)
+tokenizer="/home/vietthang/nlptools/mosesdecoder/scripts/tokenizer/tokenizer.perl"
+
+# In this script we assume that the target language is always english, and the source languages those in the "for" cycle
+
+${tokenizer} -l en < ${ecorpus}.en > ${ecorpus}.tok.en
+
+tr '[:upper:]' '[:lower:]' < ${ecorpus}.tok.en > ${ecorpus}.tok.low.en
+
+./mkcls -n10 -p${ecorpus}.tok.low.en -V${ecorpus}.tok.low.en.vcb.classes
+
+for l in "de"
+do
+	echo "Pre-processing: tokenizing and lowering..."
+
+	${tokenizer} -l ${l} < ${fcorpus}.${l} > ${fcorpus}.tok.${l}
+
+	tr '[:upper:]' '[:lower:]' < ${fcorpus}.tok.${l} > ${fcorpus}.tok.low.${l}
+
+	echo "Finished pre-processing, starting creation of vocabulary, cooccurrence and classes..."
+
+	./mkcls -n10 -p${fcorpus}.tok.low.${l} -V${fcorpus}.tok.low.${l}.vcb.classes
+
+	./plain2snt ${fcorpus}.tok.low.${l} ${ecorpus}.tok.low.en -snt1 ${ecorpus}.tok.low.snt
+
+	./snt2cooc ${ecorpus}.tok.low.cooc ${fcorpus}.tok.low.${l}.vcb ${ecorpus}.tok.low.en.vcb ${ecorpus}.tok.low.snt
+
+	echo "Finished creation! Now we start, really :)"
+
+	echo "Starting alignment: ${l} -> en" > ${l}.timelog
+	date >> ${l}.timelog
+
+	./mgiza ${ecorpus}.dict.gizacfg
+
+	echo "Finished alignment, starting merge of parts" >> ${l}.timelog
+
+	date >> ${l}.timelog
+
+	for i in 0 1 2 3
+    do
+		cat ${ecorpus}.dict.A3.final.part${i} >> ${ecorpus}.corpus_word_aligned
+	done
+
+	rm ${ecorpus}.dict.A3.final.part*
+
+	date >> ${l}.timelog
+	echo "End of process." >> ${l}.timelog
+done
